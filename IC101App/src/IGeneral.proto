@@ -1,0 +1,336 @@
+######### General Communcation of Pzramid devices ######################
+#                                                                      #
+# The functions are present in I400, IC101 and I404.                   #
+#                                                                      #
+# Communication pattern:                                               #
+# A full command from the host to the device comprises as many         #
+# characters as needed to form the message, terminated by a LF         #
+# character. The LF is required for the device to commence processing. #
+#                                                                      #
+# The device generates a reply to every message from the host when it  #
+# is the listener. First the device echos the command as sent icluding #
+# the LF. Following that the first character is ACK (0x6) when the     #
+# command has been successfully executed without error. Responses to   #
+# commands with a "?" will the have required data, terminated by CR,   #
+# LF. If no data is required nothing will be transmitted after the     #
+# ACK. If the device generates an error then it transmits a BELL (0x7) #
+# instead of the ACK.                                                  #
+#                                                                      #
+# Terminal mode has to be disabled:                                    #
+#   SYSTem:PASSword 12345                                              #
+#   SYSTem:COMMunication:TERMinal 0                                    #
+#                                                                      #
+# Checksum in answers is not implemented/checked now and should be     #
+# disabled as well.                                                    #
+#   SYSTem:PASSword 12345                                              #
+#   SYSTem:COMMunication:CHECKsum 0                                    #
+########################################################################
+
+InTerminator = LF ACK;
+OutTerminator = LF;
+replytimeout = 500;
+readtimeout  = 1000;
+locktimeout = 6000;
+
+@mismatch {
+	in "%*c";	
+}
+
+execString { 
+		exec "%s";
+}
+
+## IEEE 488.2 mandatory commands
+
+# save current state in EEPROM and recall state from EEPROM
+save {
+	out "*SAV";
+	in "*SAV";
+}
+
+recall {
+	out "*RCL";
+	in "*RCL";
+}
+
+# return to default conditions
+reset {
+	out "*RST";
+	in "*RST";
+}
+
+# clear event registers and error queue
+clear {
+	out "*CLS";
+	in "*CLS";
+}
+
+# get *IDN? string
+idn {
+	InTerminator = CR LF;
+	out "*IDN?";
+	in "*IDN?",LF ACK,"%s";
+}
+
+## pyramid commands
+
+# send get password
+sendPassword {
+	out "SYSTem:PASSword %s";
+	in "SYSTem:PASSword %*s";
+}
+
+#if enabled <PASSWORD> is response otherwise "0"
+getPassword {
+	InTerminator = CR LF;
+	out "SYSTem:PASSword?"; 
+	in "SYSTem:PASSword?",LF ACK,"%s";
+}
+
+# terminal mode
+getTerminalMode {
+	InTerminator = CR LF;
+	out "SYSTem:COMMunication:TERMinal?";
+	in "SYSTem:COMMunication:TERMinal?",LF ACK,"%s";
+}
+
+setTerminalMode {	
+	out "SYSTem:COMMunication:TERMinal %{0|1}";
+	in "SYSTem:COMMunication:TERMinal\n%u";
+}
+
+# checksum mode
+getChecksumMode {
+	InTerminator = CR LF;
+	out "SYSTem:COMMunication:CHECKsum?";
+	in "SYSTem:COMMunication:CHECKsum?\n\x06%s";
+}
+
+setChecksumMode {
+	out "SYSTem:COMMunication:CHECKsum %{0|1}";
+	in "SYSTem:COMMunication:CHECKsum\n\x06%s";
+}
+
+# read device address
+getDeviceAddress {
+	InTerminator = CR LF;
+	out "#?";
+	in "#?"LF,ACK,"%c";
+}
+
+# initiate readings on valid trigger
+init {
+	out "INIT";
+	in "INIT\10%*c";
+}
+
+# Calibration
+
+# init gain calibration
+doCalib {
+	out "CALIBration:GAIn"; 
+	in "CALIBration:GAIn";
+	@readtimeout {
+		in "CALIBration:GAIn",LF BEL;
+	}
+}
+
+# read gain calibration
+getCalib {
+	InTerminator = CR LF;
+	out "CALIBration:GAIn?"; 
+	in "CALIBration:GAIn?",LF ACK,"%s";
+	@readtimeout {
+		in "CALIBration:GAIn?",LF BEL;
+	}
+}
+
+# reset stored gains to nominal
+clearCalib {
+	out "CALIBration:GAIn CLEar"; 
+	in "CALIBration:GAIn CLEar\n\x06%s";
+}
+
+# en-/ disables internal calib source 
+testCalib {
+	out "CALIBration:SOURce %d"; 
+	in "CALIBration:SOURce %d";
+}
+
+# calibration save and recall function
+savCalib{
+	out "CALIBration:SAV";
+	in "CALIBration:SAV";
+}
+
+rclCalib{
+	out "CALIBration:RCL";
+	in "CALIBration:RCL";
+}
+
+# set and get capacitor selection
+setCap {
+	InTerminator = LF ACK;
+	out "CONFigure:CAPacitor %{0|1}"; 
+	in "CONFigure:CAPacitor %*d";
+}
+
+getCap {
+	InTerminator = CR LF;
+	out "CONFigure:CAPacitor?"; 
+	in "CONFigure:CAPacitor?\n\x06%d,%(\$1.VAL)e F";
+	@readtimeout {
+		IN "CONFigure:CAPacitor?",LF BEL;
+	}
+}
+
+# Status
+
+#It is recommended that you set all the enable registers to all 1’s.
+#The host software should use the *STB? command to watch for changes to the status of the I400,
+#and then *ESR?, :STATus:OPERation:CONDition? or :STATus:QUESTionable:CONDition?
+#as appropriate to recover the details from the relevant register.
+
+##UKNW
+##UKNW
+##EAV = Error Available
+##QSB = Questionable Summary Bit
+##MAV = Message Available
+##ESB = Event Summary Bit
+##RQS = Request for Service
+##OSB = Operation Summary Bit
+getStatusByte {
+	InTerminator = CR LF;
+	out "*STB?"; 
+	in "*STB?",LF ACK,"%u"; 
+}
+
+##Operation Complete
+##Query Error
+##Device Dependent Error
+##Execution Error
+##Command Error
+##User Request
+##Power On
+getEventStatusRegister {
+	InTerminator = CR LF;
+	OUT "*ESR?"; 
+	in "*ESR?\n\x06%u"; 
+}
+
+getEventStatusEnRegister {
+	InTerminator = CR LF;
+	OUT "*ESE?"; 
+	in "*ESE?\n\x06%u"; 
+}
+
+##Calibrating
+##na
+##Ranging
+##na
+##Measuring
+##Waiting for Trigger
+##na
+##na
+##Saving to EEPROM
+##na
+##na
+##na
+##na
+##na
+##Program running
+##na
+getStatusOperCond {
+	InTerminator = CR LF;
+	out "STATus:OPERation:CONDition?"; 
+	in "STATus:OPERation:CONDition?\n\x06%u"; 
+}
+
+##Voltage
+##Current
+##Time
+##Power
+##Temperature
+##na
+##na
+##na
+##Calibration
+##na
+##na
+##na
+##na
+##na
+##na
+##not used
+getStatusQuestCond {
+	InTerminator = CR LF;
+	out "STATus:QUESTionable:CONDition?"; 
+	in "STATus:QUESTionable:CONDition?\n\x06%u"; 
+}
+
+
+# Get Error Message, returns a quoted string.
+#
+#SYST:ERR?<\n>
+#-113,"Undefined header"<\r><\n>
+#SYST:ERR?<\n>
+#0,"No error"<\r><\n>
+getErr {
+	InTerminator = CR LF;
+	out "SYSTem:ERRor?"; 
+	in "SYSTem:ERRor?\n\x06%*d,\34%[^,\34]\34"; 
+}
+
+#Read digitals
+#bit0 = measuring
+#bit1 = waiting trigger
+#bit2 = calibrated
+#bit3 = HV enabled
+#bit4 = external gate present
+
+readDigital {
+	InTerminator = CR LF;
+	out "READ:DIGital?";
+	in "READ:DIGital?",LF ACK,"%u";
+	@replytimeout {
+		in "READ:DIGital?",LF BEL;
+		}
+}
+
+# Frequencies
+
+# get dominant noise frequency
+getFilterfreq {
+	InTerminator = CR LF;
+	OUT "SYSTem:FREQuency?";
+	in "SYSTem:FREQuency?\n\x06%s";
+}
+
+setFilterfreq { 
+	extrainput = error;
+	@mismatch {
+		IN "SYSTem:FREQuency %(\$1:\$2.VAL)39c";
+	}
+	@replytimeout {
+		IN "SYSTem%(\$1:\$2)39c";
+	}
+	#Timeout after reading 21 bytes "...YSTem:FREQuency 50<0a><07>"
+	@readtimeout {
+		IN "SYSTem%(\$1:\$2)39c";
+	}
+	OUT "SYSTem:FREQuency %s";
+	IN "SYSTem:FREQuency %s";
+}
+
+# safe state when unconnected
+getSafestate {
+	InTerminator = CR LF;
+	OUT "SYSTem:SAFEstate?";
+	in "SYSTem:SAFEstate?\n\x06%u";
+}
+
+setSafestate {
+	OUT "SYSTem:SAFEstate %s";
+	in "SYSTem:SAFEstate?",LF ACK,"%s";
+}
+#EOF

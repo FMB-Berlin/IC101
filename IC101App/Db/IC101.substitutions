@@ -1,0 +1,13 @@
+# Macro     - Description
+# P         - PV_Prefix1
+# R         - PV_Prefix2
+# PORT      - Serial port name from asyn
+# SCANRATE  - Epics scan rates for daemon threads
+# CAP#NAME  - Name for capacitors
+# CAP#VAL   - Value for capacitors
+# CAP0_IMAX - Value for auto switch of capacitors
+
+file /opt/epics/modules/IC101/db/IC101.template{
+pattern {      P,      R,      PORT, SCANRATE_FAST, SCANRATE_SLOW, CAP0NAME ,     CAP0VAL, CAP1NAME,      CAP1VAL, CAP0_IMAX}
+        { "FMBB", "BL01", "IC101_1",  ".5 second",    "1 second",   "100pF", "100.0e-12", "3300pF", "3300.0e-12",  "8.0e-7"}
+}
