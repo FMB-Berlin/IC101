@@ -1,20 +1,28 @@
 # The IC101 module
 
-This module supports the IC101 via com-port or via a moxa tcp server
-for serial connection between the IOC and the device.
+This module enables communication with a Pyramid Technical Consultants
+IC101 - Precision Electrometer via a serial connection using the com-port or
+a moxa tcp server between an EPICS IOC and the device.
 
-## Required support modules
+## Requirements
+Mandatory for the usage of this module is a working EPICS base installation.
+The module was tested with EPICS base 1.15.
 
-Required are:
+Required modules are:
 - asyn
 - stream
 - calc
 - autosave
 - seq
+These modules comes with the synApps package from APS. The IC101 driver was
+tested with synApps version 6.1.
+
+The IC101 module supports a graphical user interface which requires an EDM
+installation.
 
 ## Installation
 
-Check "configure/RELEASE" and correct the path to the epics/base and the
+Check "configure/RELEASE" and correct the path to the epics base directory and the
 required support modules.
 
 Run "make" in TOP directory of the modules.
